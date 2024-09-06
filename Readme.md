@@ -4,12 +4,6 @@ I chose [lalrpop](https://github.com/lalrpop/lalrpop), an LR(1) parser generator
 
 `lalrpop` offers a wide variety of great features like macros, abbreviations, Kleene star-like operators, etc. I didn't take advantage of most of these, as it was easier to follow the provided grammar without them. If one were inclined to optimize this project, they should probably start there. As in Lab 1, I use the external [logos](https://github.com/maciejhirsz/logos) lexer.
 
-### Language Selection
-
-I chose to parse the original C89 standard. This decision was mostly driven by curiosity about C, after quickly hacking together a simple while-language and realizing that it would be a doable challenge.
-
-In the end, I learned a lot about C itself and a little bit about how smart people write grammars for programming languages. It was interesting to see how a C file is structured internally.
-
 ### Notes About the Process
 
 Most of the actual work involved figuring out `lalrpop`, setting up basic functionality, and getting it to parse something. This worked surprisingly well, with a few caveats that were mostly related to recursive `enums`, which Rust doesn't allow. Introducing redirection via the `Box` concept solved this.
@@ -107,6 +101,7 @@ Furthermore the C89 doesn't seem to care about [dangling](https://en.wikipedia.o
 I forced curly braces around the if/else conditionals by forcing a compound_statement instead of a statement, which solves this. In theory we could also follow the C89 standard (Which apparently suggests "that an else block is associated with the nearest if"), but this was an easy and reasonable solution since lalrpop doesn't allow ambiguous grammars.
 
 => The implemented grammar in this project is a unambiguous version of the (slightly altered) C89 specification.
+In the end, I learned a lot about C itself and a little bit about how smart people write grammars for programming languages.
 
 ## Errror Handling
 Some error handling is provided by the parser-generator and the lexer. It is able to give hints regarding wrong syntax and tokens.
