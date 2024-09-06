@@ -1,0 +1,1004 @@
+use crate::tokens::{Token, LexicalError};
+use crate::ast;
+
+grammar;
+
+extern {
+  type Location = usize;
+  type Error = LexicalError;
+
+  enum Token {
+    // Keywords
+    "return" => Token::KeywordReturn,
+    "break" => Token::KeywordBreak,
+    "while" => Token::KeywordWhile,
+    "if" => Token::KeywordIf,
+    "do" => Token::KeywordDo,
+    "typedef" => Token::KeywordTypeDef,
+    "enum" => Token::KeywordEnum,
+    "struct" => Token::KeywordStruct,
+    "union" => Token::KeywordUnion,
+    "..." => Token::KeywordEllipsis,
+    "extern" => Token::KeywordExtern,
+    "static" => Token::KeywordStatic,
+    "auto" => Token::KeywordAuto,
+    "register" => Token::KeywordRegister,
+    "case" => Token::KeywordCase,
+    "else" => Token::KeywordElse,
+    "default" => Token::KeywordDefault,
+    "switch" => Token::KeywordSwitch,
+    "for" => Token::KeywordFor,
+    "continue" => Token::KeywordContinue,
+    "goto" => Token::KeywordGoto,
+    "sizeof" => Token::KeywordSizeof,
+ 
+    // Type Qualifier:
+    "const" => Token::KeywordConst,
+    "volatile" => Token::KeywordVolatile,
+
+    // Type Specifier:
+    "void" => Token::KeywordVoid,
+    "char" => Token::KeywordChar,
+    "short" => Token::KeywordShort,
+    "int" => Token::KeywordInt,
+    "long" => Token::KeywordLong,
+    "float" => Token::KeywordFloat,
+    "double" => Token::KeywordDouble,
+    "signed" => Token::KeywordSigned,
+    "unsigned" => Token::KeywordUnsigned,
+    
+    // Literals/constants
+    "identifier" => Token::Identifier(<String>),
+    "string_literal" => Token::StringLiteral(<String>),
+    "char_literal" => Token::CharLiteral(<char>),
+    "integer" => Token::Integer(<i64>),
+    "octal_number" => Token::Octal(<i64>),
+    "hexadecimal_number" => Token::Hexadecimal(<i64>),
+    "float_number" => Token::Float(<String>),
+    
+
+    // Braces
+    "(" => Token::LParen,
+    ")" => Token::RParen,
+    "{" => Token::LCurly,
+    "}" => Token::RCurly,
+    "[" => Token::LSquare,
+    "]" => Token::RSquare,
+
+    // Special Characters
+    "=" => Token::Assign,
+    ";" => Token::Semicolon,
+    ":" => Token::Colon,
+    "." => Token::Dot,
+    "," => Token::Comma,
+    ">>" => Token::RightOp,
+    "<<" => Token::LeftOp,
+    "^" => Token::Xor,
+    "->" => Token::Arrow,
+    "?" => Token::QuestionMark,
+
+    // Logical Operators
+    "||" => Token::LogicalOr,
+    "!" => Token::Not,
+    "&&" => Token::LogicalAnd,
+    "|" => Token::BitwiseOr,
+    "&" => Token::BitwiseAnd,
+    "~" => Token::BitwiseNot,
+    ">=" => Token::GreaterEqual,
+    "<=" => Token::LesserEqual,
+    "++" => Token::Increment,
+    "--" => Token::Decrement,
+
+
+    // Assigns
+    "+=" => Token::AddAssign,
+    "-=" => Token::SubAssign,
+    "/=" => Token::DivideAssign,
+    "*=" => Token::MultiplyAssign,
+    "%=" => Token::ModAssign,
+    "&=" => Token::AndAssign,
+    "<<=" => Token::LeftShiftAssign,
+    ">>=" => Token::RightShiftAssign,
+    "^=" => Token::XORAssign,
+    "|=" => Token::ORAssign,
+
+
+    // Mathy operators
+    "+" => Token::OperatorAdd,
+    "-" => Token::OperatorSub,
+    "*" => Token::OperatorMul,
+    "/" => Token::OperatorDiv,
+    "%" => Token::OperatorModulo,
+    "==" => Token::OperatorEqual,
+    "!=" => Token::OperatorNotEqual,
+    "<" => Token::OperatorLesser,
+    ">" => Token::OperatorGreater,
+  }
+}
+
+
+/*
+primary_expression
+    : IDENTIFIER
+    | CONSTANT
+    | STRING_LITERAL
+    | '(' expression ')'
+    ;
+*/
+pub PrimaryExpression: ast::PrimaryExpression = {
+  <identifier:"identifier"> => ast::PrimaryExpression::Identifier(identifier),
+  // The handling of constants is slightly ugly, but it would be an easy fix to have a case distinction later on
+  // where we do a backconversion, based on the fact that we can basically run the same "lex again"/"regex again"
+  // to distinguish between the different variants of constants.
+  <integer:"integer"> => ast::PrimaryExpression::Constant(integer.to_string()),
+  <char_literal:"char_literal"> => ast::PrimaryExpression::Constant(char_literal.to_string()),
+  <string_literal:"string_literal"> => ast::PrimaryExpression::StringLiteral(string_literal),
+  <octal_number:"octal_number"> => ast::PrimaryExpression::StringLiteral(octal_number.to_string()),
+  <hexadecimal_number:"hexadecimal_number"> => ast::PrimaryExpression::StringLiteral(hexadecimal_number.to_string()),
+  "(" <Expression> ")" => ast::PrimaryExpression::ParenthesizedExpression(Box::new(<>)),
+  <float_number:"float_number"> => ast::PrimaryExpression::StringLiteral(float_number.to_string()),
+}
+
+/*
+postfix_expression
+    : primary_expression
+    | postfix_expression '[' expression ']'
+    | postfix_expression '(' ')'
+    | postfix_expression '(' argument_expression_list ')'
+    | postfix_expression '.' IDENTIFIER
+    | postfix_expression PTR_OP IDENTIFIER
+    | postfix_expression INC_OP
+    | postfix_expression DEC_OP
+    ;
+*/
+pub PostfixExpression: ast::PostfixExpression = {
+  <PrimaryExpression> => ast::PostfixExpression::PrimaryExpression(<>),
+  <PostfixExpression> "[" <Expression> "]" => ast::PostfixExpression::ArrayAccess(Box::new((<>,))),
+  <PostfixExpression> "(" ")" => ast::PostfixExpression::FunctionCall(Box::new((<>,))),
+  <PostfixExpression> "(" <ArgumentExpressionList> ")" => ast::PostfixExpression::FunctionCallArgument(Box::new((<>,))),
+  <PostfixExpression> "." <"identifier"> => ast::PostfixExpression::MemberAccess(Box::new((<>,))),
+  <PostfixExpression> "->" <"identifier"> => ast::PostfixExpression::PointerAccess(Box::new((<>,))),
+  <PostfixExpression> "++" => ast::PostfixExpression::Increment(Box::new((<>,))),
+  <PostfixExpression> "--" => ast::PostfixExpression::Decrement(Box::new((<>,))),
+}
+
+/*
+argument_expression_list
+    : assignment_expression
+    | argument_expression_list ',' assignment_expression
+    ;
+*/
+pub ArgumentExpressionList: ast::ArgumentExpressionList = {
+  <AssignmentExpression> => ast::ArgumentExpressionList::Single(Box::new((<>,))),
+  <ArgumentExpressionList> "," <AssignmentExpression> => ast::ArgumentExpressionList::Multiple(Box::new((<>,))),
+}
+
+/*
+unary_expression
+    : postfix_expression
+    | INC_OP unary_expression
+    | DEC_OP unary_expression
+    | unary_operator cast_expression
+    | SIZEOF unary_expression
+    | SIZEOF '(' type_name ')'
+    ;
+*/
+pub UnaryExpression: ast::UnaryExpression = {
+  <PostfixExpression> => ast::UnaryExpression::PostfixExpression(Box::new((<>,))),
+  "++" <UnaryExpression> => ast::UnaryExpression::Increment(Box::new((<>,))),
+  "--" <UnaryExpression> => ast::UnaryExpression::Decrement(Box::new((<>,))),
+  <UnaryOperator> <CastExpression> => ast::UnaryExpression::UnaryOperator(Box::new((<>,))),
+  "sizeof" <UnaryExpression> => ast::UnaryExpression::SizeOfExpression(Box::new((<>,))),
+  "sizeof" "(" <TypeName> ")" => ast::UnaryExpression::SizeOfType(Box::new((<>,))),
+}
+
+/*
+unary_operator
+    : '&'
+    | '*'
+    | '+'
+    | '-'
+    | '~'
+    | '!'
+    ;
+*/
+pub UnaryOperator: ast::UnaryOperator = {
+  "&" => ast::UnaryOperator::And,
+  "*" => ast::UnaryOperator::Mul,
+  "+" => ast::UnaryOperator::Add,
+  "-" => ast::UnaryOperator::Sub,
+  "~" => ast::UnaryOperator::BitwiseNot,
+  "!" => ast::UnaryOperator::Not,
+}
+
+/*
+cast_expression
+    : unary_expression
+    | '(' type_name ')' cast_expression
+    ;
+*/
+pub CastExpression: ast::CastExpression = {
+  <UnaryExpression> => ast::CastExpression::UnaryExpression(Box::new((<>,))),
+  "(" <TypeName> ")" <CastExpression> => ast::CastExpression::Cast(Box::new((<>,)))
+}
+
+/*
+multiplicative_expression
+    : cast_expression
+    | multiplicative_expression '*' cast_expression
+    | multiplicative_expression '/' cast_expression
+    | multiplicative_expression '%' cast_expression
+    ;
+*/
+pub MultiplicativeExpression: ast::MultiplicativeExpression = {
+  <CastExpression> => ast::MultiplicativeExpression::CastExpression(Box::new((<>,))),
+  <MultiplicativeExpression> "*" <CastExpression> => ast::MultiplicativeExpression::Multiply(Box::new((<>,))),
+  <MultiplicativeExpression> "/" <CastExpression> => ast::MultiplicativeExpression::Divide(Box::new((<>,))),
+  <MultiplicativeExpression> "%" <CastExpression> => ast::MultiplicativeExpression::Modulus(Box::new((<>,))),
+}
+
+/*
+additive_expression
+    : multiplicative_expression
+    | additive_expression '+' multiplicative_expression
+    | additive_expression '-' multiplicative_expression
+    ;
+*/
+pub AdditiveExpression: ast::AdditiveExpression = {
+  <MultiplicativeExpression> => ast::AdditiveExpression::MultiplicativeExpression(Box::new((<>,))),
+  <AdditiveExpression> "+" <MultiplicativeExpression> => ast::AdditiveExpression::Add(Box::new((<>,))),
+  <AdditiveExpression> "-" <MultiplicativeExpression> => ast::AdditiveExpression::Subtract(Box::new((<>,)))
+}
+
+/*
+shift_expression
+    : additive_expression
+    | shift_expression LEFT_OP additive_expression
+    | shift_expression RIGHT_OP additive_expression
+    ;
+*/
+pub ShiftExpression: ast::ShiftExpression = {
+  <AdditiveExpression> => ast::ShiftExpression::AdditiveExpression(Box::new((<>,))),
+  <ShiftExpression> "<<" <AdditiveExpression> => ast::ShiftExpression::LeftShift(Box::new((<>,))),
+  <ShiftExpression> ">>" <AdditiveExpression> => ast::ShiftExpression::RightShift(Box::new((<>,)))
+}
+
+/*
+relational_expression
+    : shift_expression
+    | relational_expression '<' shift_expression
+    | relational_expression '>' shift_expression
+    | relational_expression LE_OP shift_expression
+    | relational_expression GE_OP shift_expression
+    ;
+*/
+pub RelationalExpression: ast::RelationalExpression = {
+  <ShiftExpression> => ast::RelationalExpression::ShiftExpression(Box::new((<>,))),
+  <RelationalExpression> "<" <ShiftExpression> => ast::RelationalExpression::LessThan(Box::new((<>,))),
+  <RelationalExpression> ">" <ShiftExpression> => ast::RelationalExpression::GreaterThan(Box::new((<>,))),
+  <RelationalExpression> "<=" <ShiftExpression> => ast::RelationalExpression::LessThanOrEqual(Box::new((<>,))),
+  <RelationalExpression> ">=" <ShiftExpression> => ast::RelationalExpression::GreaterThanOrEqual(Box::new((<>,)))
+}
+
+/*
+equality_expression
+    : relational_expression
+    | equality_expression EQ_OP relational_expression
+    | equality_expression NE_OP relational_expression
+    ;
+*/
+pub EqualityExpression: ast::EqualityExpression = {
+  <RelationalExpression> => ast::EqualityExpression::RelationalExpression(Box::new((<>,))),
+  <EqualityExpression> "==" <RelationalExpression> => ast::EqualityExpression::Equal(Box::new((<>,))),
+  <EqualityExpression> "!=" <RelationalExpression> => ast::EqualityExpression::NotEqual(Box::new((<>,)))
+}
+
+/*
+and_expression
+    : equality_expression
+    | and_expression '&' equality_expression
+    ;
+*/
+pub AndExpression: ast::AndExpression = {
+  <EqualityExpression> => ast::AndExpression::EqualityExpression(Box::new((<>,))),
+  <AndExpression> "&" <EqualityExpression> => ast::AndExpression::And(Box::new((<>,))),
+
+}
+
+/*
+exclusive_or_expression
+    : and_expression
+    | exclusive_or_expression '^' and_expression
+    ;
+*/
+pub ExclusiveOrExpression: ast::ExclusiveOrExpression = {
+  <and_expression:AndExpression> => ast::ExclusiveOrExpression::AndExpression(Box::new((<>,))),
+  <exclusive_or_expression:ExclusiveOrExpression> "^" <and_expression:AndExpression> => ast::ExclusiveOrExpression::Xor(Box::new((<>,))),
+
+}
+
+/*
+inclusive_or_expression
+    : exclusive_or_expression
+    | inclusive_or_expression '|' exclusive_or_expression
+    ;
+*/
+pub InclusiveOrExpression: ast::InclusiveOrExpression = {
+  <ExclusiveOrExpression> => ast::InclusiveOrExpression::ExclusiveOrExpression(Box::new((<>,))),
+  <InclusiveOrExpression> "|" <ExclusiveOrExpression> => ast::InclusiveOrExpression::Or(Box::new((<>,))),
+}
+
+/*
+logical_and_expression
+    : inclusive_or_expression
+    | logical_and_expression AND_OP inclusive_or_expression
+    ;
+*/
+pub LogicalAndExpression: ast::LogicalAndExpression = {
+  <InclusiveOrExpression> => ast::LogicalAndExpression::InclusiveOrExpression(Box::new((<>,))),
+  <LogicalAndExpression> "&&" <InclusiveOrExpression> => ast::LogicalAndExpression::And(Box::new((<>,))),
+}
+
+/*
+logical_or_expression
+    : logical_and_expression
+    | logical_or_expression OR_OP logical_and_expression
+    ;
+*/
+pub LogicalOrExpression: ast::LogicalOrExpression = {
+  <LogicalAndExpression> => ast::LogicalOrExpression::LogicalAndExpression(Box::new((<>,))),
+  <LogicalOrExpression> "||" <LogicalAndExpression> => ast::LogicalOrExpression::Or(Box::new((<>,))),
+}
+
+/*
+conditional_expression
+    : logical_or_expression
+    | logical_or_expression '?' expression ':' conditional_expression
+    ;
+*/
+pub ConditionalExpression: ast::ConditionalExpression = {
+  <LogicalOrExpression> => ast::ConditionalExpression::LogicalOrExpression(Box::new((<>,))),
+  <LogicalOrExpression> "?" <Expression> ":" <ConditionalExpression> => ast::ConditionalExpression::Conditional(Box::new((<>,))),
+}
+
+/*
+assignment_expression
+    : conditional_expression
+    | unary_expression assignment_operator assignment_expression
+    ;
+*/
+pub AssignmentExpression: ast::AssignmentExpression = {
+  <ConditionalExpression> => ast::AssignmentExpression::ConditionalExpression(Box::new((<>,))),
+  <UnaryExpression> <AssignmentOperator> <AssignmentExpression> => ast::AssignmentExpression::Assignment(Box::new((<>,))),
+}
+
+/*
+assignment_operator
+    : '='
+    | MUL_ASSIGN
+    | DIV_ASSIGN
+    | MOD_ASSIGN
+    | ADD_ASSIGN
+    | SUB_ASSIGN
+    | LEFT_ASSIGN
+    | RIGHT_ASSIGN
+    | AND_ASSIGN
+    | XOR_ASSIGN
+    | OR_ASSIGN
+    ;
+*/
+pub AssignmentOperator: ast::AssignmentOperator = {
+  "=" => ast::AssignmentOperator::Assign,
+  "*=" => ast::AssignmentOperator::MultiplyAssign,
+  "/=" => ast::AssignmentOperator::DivideAssign,
+  "%=" => ast::AssignmentOperator::ModAssign,
+  "+=" => ast::AssignmentOperator::AddAssign,
+  "-=" => ast::AssignmentOperator::SubAssign,
+  "<<=" => ast::AssignmentOperator::LeftShiftAssign,
+  ">>=" => ast::AssignmentOperator::RightShiftAssign,
+  "&=" => ast::AssignmentOperator::AndAssign,
+  "^=" => ast::AssignmentOperator::XORAssign,
+  "|=" => ast::AssignmentOperator::OrAssign,
+}
+
+
+/*
+expression
+    : assignment_expression
+    | expression ',' assignment_expression
+    ;
+*/
+pub Expression: ast::Expression = {
+  <AssignmentExpression> => ast::Expression::AssignmentExpression(Box::new((<>,))),
+  <Expression> "," <AssignmentExpression> => ast::Expression::Multiple(Box::new((<>,))),
+}
+
+/*
+constant_expression
+    : conditional_expression
+    ;
+*/
+pub ConstantExpression: ast::ConstantExpression = {
+  <ConditionalExpression> => ast::ConstantExpression::ConditionalExpression(Box::new((<>,))),
+}
+
+/*
+declaration
+    : declaration_specifiers ';'
+    | declaration_specifiers init_declarator_list ';'
+    ;
+*/
+pub Declaration: ast::Declaration = {
+  <DeclarationSpecifiers> ";" => ast::Declaration::DeclarationSpecifiers(Box::new((<>,))),
+  <DeclarationSpecifiers> <InitDeclaratorList> ";" => ast::Declaration::DeclarationSpecifiersWithList(Box::new((<>,))),
+}
+
+/*
+declaration_specifiers
+    : 
+    | storage_class_specifier declaration_specifiers
+    | type_specifier
+    | type_specifier declaration_specifiers
+    | type_qualifier
+    | type_qualifier declaration_specifiers
+    ;
+*/
+
+pub DeclarationSpecifiers: ast::DeclarationSpecifiers = {
+  <StorageClassSpecifier> <DeclarationSpecifiers> => ast::DeclarationSpecifiers::StorageClassSpecifierRec(Box::new((<>,))),
+  <TypeSpecifier> => ast::DeclarationSpecifiers::TypeSpecifier(Box::new((<>,))),
+  <TypeSpecifier> <DeclarationSpecifiers> => ast::DeclarationSpecifiers::TypeSpecifierRec(Box::new((<>,))),
+  <TypeQualifier> => ast::DeclarationSpecifiers::TypeQualifier(Box::new((<>,))),
+  <TypeQualifier> <DeclarationSpecifiers> => ast::DeclarationSpecifiers::TypeQualifierRec(Box::new((<>,))),
+}
+
+/*
+init_declarator_list
+    : init_declarator
+    | init_declarator_list ',' init_declarator
+    ;
+*/
+pub InitDeclaratorList: ast::InitDeclaratorList = {
+   <InitDeclarator> => ast::InitDeclaratorList::Single(Box::new((<>,))),
+   <InitDeclaratorList> "," <InitDeclarator> => ast::InitDeclaratorList::Multiple(Box::new((<>,))),
+}
+
+/*
+init_declarator
+    : declarator
+    | declarator '=' initializer
+    ;
+*/
+pub InitDeclarator: ast::InitDeclarator = {
+  <Declarator> => ast::InitDeclarator::Declarator(Box::new((<>,))),
+  <Declarator> "=" <Initializer> => ast::InitDeclarator::DeclaratorWithInitializer(Box::new((<>,))),
+}
+
+/*
+storage_class_specifier
+    : TYPEDEF
+    | EXTERN
+    | STATIC
+    | AUTO
+    | REGISTER
+    ;
+*/
+pub StorageClassSpecifier: ast::StorageClassSpecifier = {
+  "typedef" =>
+    ast::StorageClassSpecifier::TypeDef,
+  "extern" =>
+    ast::StorageClassSpecifier::Extern,
+  "static" =>
+    ast::StorageClassSpecifier::Static,
+  "auto" =>
+    ast::StorageClassSpecifier::Auto,
+  "register" =>
+    ast::StorageClassSpecifier::Register,
+}
+
+/*
+type_specifier
+    : VOID
+    | CHAR
+    | SHORT
+    | INT
+    | LONG
+    | FLOAT
+    | DOUBLE
+    | SIGNED
+    | UNSIGNED
+    | struct_or_union_specifier
+    | enum_specifier
+    | TYPE_NAME
+    ;
+*/
+pub TypeSpecifier: ast::TypeSpecifier = {
+   "void" => ast::TypeSpecifier::Void,
+   "char" => ast::TypeSpecifier::Char,
+   "short" => ast::TypeSpecifier::Short,
+   "int" => ast::TypeSpecifier::Int,
+   "long" => ast::TypeSpecifier::Long,
+   "float" => ast::TypeSpecifier::Float,
+   "double" => ast::TypeSpecifier::Double,
+   "signed" => ast::TypeSpecifier::Signed,
+   "unsigned" => ast::TypeSpecifier::Unsigned,
+   <StructOrUnionSpecifier> => ast::TypeSpecifier::StructOrUnionSpecifier(Box::new((<>,))),
+   <EnumSpecifier> => ast::TypeSpecifier::EnumSpecifier(Box::new((<>,))),
+   // Defining custom types requires dynamically adding stuff to the lexer or changing the grammar.
+   // For now I am not doing that.
+   // TODO
+   //<identifier:"identifier"> => ast::TypeSpecifier::TypeName(identifier),
+}
+
+
+/*
+struct_or_union_specifier
+    : struct_or_union IDENTIFIER '{' struct_declaration_list '}'
+    | struct_or_union '{' struct_declaration_list '}'
+    | struct_or_union IDENTIFIER
+    ;
+*/
+pub StructOrUnionSpecifier: ast::StructOrUnionSpecifier = {
+  <StructOrUnion> <"identifier"> "{" <StructDeclarationList> "}" => ast::StructOrUnionSpecifier::Named(Box::new((<>,))),
+  <StructOrUnion> "{" <StructDeclarationList> "}" => ast::StructOrUnionSpecifier::Anonymous(Box::new((<>,))),
+  <StructOrUnion> <"identifier"> => ast::StructOrUnionSpecifier::NamedOnly(Box::new((<>,))),
+}
+
+/*
+struct_or_union
+    : STRUCT
+    | UNION
+    ;
+*/
+pub StructOrUnion: ast::StructOrUnion = {
+  "struct" => ast::StructOrUnion::Struct,
+  "union" => ast::StructOrUnion::Union,
+}
+
+/*
+struct_declaration_list
+    : struct_declaration
+    | struct_declaration_list struct_declaration
+    ;
+*/
+pub StructDeclarationList: ast::StructDeclarationList = {
+  <StructDeclaration> => ast::StructDeclarationList::Single(Box::new((<>,))),
+  <StructDeclarationList> <StructDeclaration> => ast::StructDeclarationList::Multiple(Box::new((<>,))),
+}
+
+/*
+struct_declaration
+    : specifier_qualifier_list struct_declarator_list ';'
+    ;
+*/
+pub StructDeclaration: ast::StructDeclaration = {
+  <SpecifierQualifierList> <StructDeclaratorList> ";" => ast::StructDeclaration::SpecifierQualifierList(Box::new((<>,))),
+}
+
+/*
+specifier_qualifier_list
+    : type_specifier specifier_qualifier_list
+    | type_specifier
+    | type_qualifier specifier_qualifier_list
+    | type_qualifier
+    ;
+*/
+pub SpecifierQualifierList: ast::SpecifierQualifierList = {
+  <TypeSpecifier> <SpecifierQualifierList> => ast::SpecifierQualifierList::TypeSpecifierMultiple(Box::new((<>,))),
+  <TypeQualifier> <SpecifierQualifierList> => ast::SpecifierQualifierList::TypeQualifierMultiple(Box::new((<>,))),
+  <TypeSpecifier> => ast::SpecifierQualifierList::TypeSpecifierSingle(Box::new((<>,))),
+  <TypeQualifier> => ast::SpecifierQualifierList::TypeQualifierSingle(Box::new((<>,))),
+} 
+
+/*
+struct_declarator_list
+    : struct_declarator
+    | struct_declarator_list ',' struct_declarator
+    ;
+*/
+pub StructDeclaratorList: ast::StructDeclaratorList = {
+  <StructDeclarator> => ast::StructDeclaratorList::Single(Box::new((<>,))),
+  <StructDeclaratorList> "," <StructDeclarator> => ast::StructDeclaratorList::Multiple(Box::new((<>,))),
+}
+
+/*
+struct_declarator
+    : declarator
+    | ':' constant_expression
+    | declarator ':' constant_expression
+    ;
+*/
+pub StructDeclarator: ast::StructDeclarator = {
+  <Declarator> => ast::StructDeclarator::Declarator(Box::new((<>,))),
+  ":" <ConstantExpression> => ast::StructDeclarator::BitField(Box::new((<>,))),
+  <Declarator> ":" <ConstantExpression> => ast::StructDeclarator::DeclaratorWithBitField(Box::new((<>,))),
+}
+
+/*
+enum_specifier
+    : ENUM '{' enumerator_list '}'
+    | ENUM IDENTIFIER '{' enumerator_list '}'
+    | ENUM IDENTIFIER
+    ;
+*/
+pub EnumSpecifier: ast::EnumSpecifier = {
+  "enum" "{" <EnumeratorList> "}" => ast::EnumSpecifier::Anonymous(Box::new((<>,))),
+  "enum" <"identifier"> "{" <EnumeratorList> "}" => ast::EnumSpecifier::Named(Box::new((<>,))),
+  "enum" <"identifier"> => ast::EnumSpecifier::NamedOnly(Box::new((<>,))),
+}
+
+/*
+enumerator_list
+    : enumerator
+    | enumerator_list ',' enumerator
+    ;
+*/
+pub EnumeratorList: ast::EnumeratorList = {
+  <Enumerator> => ast::EnumeratorList::Single(Box::new((<>,))),
+  <EnumeratorList> "," <Enumerator> => ast::EnumeratorList::EnumeratorList(Box::new((<>,))),
+}
+
+/*
+enumerator
+    : IDENTIFIER
+    | IDENTIFIER '=' constant_expression
+    ;
+*/
+pub Enumerator: ast::Enumerator = {
+  <"identifier"> => ast::Enumerator::Identifier(Box::new((<>,))),
+  <"identifier"> "=" <ConstantExpression> => ast::Enumerator::IdentifierWithValue(Box::new((<>,))),
+}
+
+/*
+type_qualifier
+    : CONST
+    | VOLATILE
+    ;
+*/
+pub TypeQualifier: ast::TypeQualifier = {
+   "volatile" => ast::TypeQualifier::Volatile,
+   "const" => ast::TypeQualifier::Const,
+}
+
+/*
+declarator
+    : pointer direct_declarator
+    | direct_declarator
+    ;
+*/
+pub Declarator: ast::Declarator = {
+  <DirectDeclarator> => ast::Declarator::Direct(Box::new((<>,))),
+}
+
+/*
+direct_declarator
+    : IDENTIFIER
+    | '(' declarator ')'
+    | direct_declarator '[' constant_expression ']'
+    | direct_declarator '[' ']'
+    | direct_declarator '(' parameter_type_list ')'
+    | direct_declarator '(' identifier_list ')'
+    | direct_declarator '(' ')'
+    ;
+*/
+pub DirectDeclarator: ast::DirectDeclarator = {
+  <"identifier"> =>
+    ast::DirectDeclarator::Identifier(Box::new((<>,))),
+  "(" <Declarator> ")" => ast::DirectDeclarator::Parenthesized(Box::new((<>,))),
+  <DirectDeclarator> "[" <ConstantExpression> "]" => ast::DirectDeclarator::ArrayWithSize(Box::new((<>,))),
+  <DirectDeclarator> "[" "]" => ast::DirectDeclarator::ArrayWithoutSize(Box::new((<>,))),
+  <DirectDeclarator> "(" <ParameterTypeList> ")" => ast::DirectDeclarator::FunctionWithParams(Box::new((<>,))),
+  <DirectDeclarator> "(" <IdentifierList> ")" => ast::DirectDeclarator::FunctionWithIdentifiers(Box::new((<>,))),
+  <DirectDeclarator> "(" ")" => ast::DirectDeclarator::FunctionWithoutParams(Box::new((<>,))),
+}
+
+/*
+pointer
+    : '*'
+    | '*' type_qualifier_list
+    | '*' pointer
+    | '*' type_qualifier_list pointer
+    ;
+*/
+pub Pointer: ast::Pointer = {
+  "*" => ast::Pointer::Base,
+  "*" <TypeQualifierList> => ast::Pointer::WithTypeQualifiers(Box::new((<>,))),
+  "*" <Pointer> => ast::Pointer::Recursive(Box::new((<>,))),
+  "*" <TypeQualifierList> <Pointer> => ast::Pointer::WithTypeQualifiersAndPointer(Box::new((<>,))),
+}
+
+/*
+type_qualifier_list
+    : type_qualifier
+    | type_qualifier_list type_qualifier
+    ;
+*/
+pub TypeQualifierList: ast::TypeQualifierList = {
+  <TypeQualifier> => ast::TypeQualifierList::Single(Box::new((<>,))),
+  <TypeQualifierList> <TypeQualifier> => ast::TypeQualifierList::Multiple(Box::new((<>,))),
+}
+
+/*
+parameter_type_list
+    : parameter_list
+    | parameter_list ',' ELLIPSIS
+    ;
+*/
+pub ParameterTypeList: ast::ParameterTypeList = {
+  <ParameterList> => ast::ParameterTypeList::List(Box::new((<>,))),
+  <ParameterList> "," "..." => ast::ParameterTypeList::ListWithEllipsis(Box::new((<>,))),
+}
+
+/*
+parameter_list
+    : parameter_declaration
+    | parameter_list ',' parameter_declaration
+    ;
+*/
+pub ParameterList: ast::ParameterList = {
+  <ParameterDeclaration> => ast::ParameterList::Single(Box::new((<>,))),
+  <ParameterList> "," <ParameterDeclaration> => ast::ParameterList::Multiple(Box::new((<>,))),
+}
+
+/*
+parameter_declaration
+    : declaration_specifiers declarator
+    | declaration_specifiers abstract_declarator
+    | declaration_specifiers
+    ;
+*/
+pub ParameterDeclaration: ast::ParameterDeclaration = {
+  <DeclarationSpecifiers> <Declarator> => ast::ParameterDeclaration::WithDeclarator(Box::new((<>,))),
+  <DeclarationSpecifiers> <AbstractDeclarator> => ast::ParameterDeclaration::WithAbstractDeclarator(Box::new((<>,))),
+  <DeclarationSpecifiers> => ast::ParameterDeclaration::OnlySpecifiers(Box::new((<>,))),
+}
+
+/*
+identifier_list
+    : IDENTIFIER
+    | identifier_list ',' IDENTIFIER
+    ;
+*/
+pub IdentifierList: ast::IdentifierList = {
+  <"identifier"> => ast::IdentifierList::Single(Box::new((<>,))),
+  <IdentifierList> "," <"identifier"> => ast::IdentifierList::Multiple(Box::new((<>,))),
+}
+
+/*
+type_name
+    : specifier_qualifier_list
+    | specifier_qualifier_list abstract_declarator
+    ;
+*/
+pub TypeName: ast::TypeName = {
+  <SpecifierQualifierList> => ast::TypeName::SpecifierQualifierList(Box::new((<>,))),
+  <SpecifierQualifierList> <AbstractDeclarator> => ast::TypeName::SpecifierQualifierListWithAbstract(Box::new((<>,))),
+}
+
+/*
+abstract_declarator
+    : pointer
+    | direct_abstract_declarator
+    | pointer direct_abstract_declarator
+    ;
+*/
+pub AbstractDeclarator: ast::AbstractDeclarator = {
+  <Pointer> => ast::AbstractDeclarator::PointerOnly(Box::new((<>,))),
+  <DirectAbstractDeclarator> => ast::AbstractDeclarator::DirectAbstractDeclarator(Box::new((<>,))),
+  <Pointer> <DirectAbstractDeclarator> => ast::AbstractDeclarator::PointerWithDirect(Box::new((<>,))),
+}
+
+/*
+direct_abstract_declarator
+    : '(' abstract_declarator ')'
+    | '[' ']'
+    | '[' constant_expression ']'
+    | direct_abstract_declarator '[' ']'
+    | direct_abstract_declarator '[' constant_expression ']'
+    | '(' ')'
+    | '(' parameter_type_list ')'
+    | direct_abstract_declarator '(' ')'
+    | direct_abstract_declarator '(' parameter_type_list ')'
+    ;
+*/
+pub DirectAbstractDeclarator: ast::DirectAbstractDeclarator = {
+  "(" <AbstractDeclarator> ")" => ast::DirectAbstractDeclarator::Parenthesized(Box::new((<>,))),
+  "[" "]" => ast::DirectAbstractDeclarator::ArrayBase,
+  "[" <ConstantExpression> "]" => ast::DirectAbstractDeclarator::ArrayConstExpression(Box::new((<>,))),
+  <DirectAbstractDeclarator> "[" "]" => ast::DirectAbstractDeclarator::RecArrayBase(Box::new((<>,))),
+  <DirectAbstractDeclarator> "[" <ConstantExpression> "]" => ast::DirectAbstractDeclarator::RecArrayConstExpression(Box::new((<>,))),
+  "(" ")" => ast::DirectAbstractDeclarator::FunctionBase,
+  "(" <ParameterTypeList> ")" => ast::DirectAbstractDeclarator::FunctionParameterTypeList(Box::new((<>,))),
+  <DirectAbstractDeclarator> "(" ")" => ast::DirectAbstractDeclarator::RecFunctionBase(Box::new((<>,))),
+  <DirectAbstractDeclarator> "(" <ParameterTypeList> ")" => ast::DirectAbstractDeclarator::RecFunctionParameterTypeList(Box::new((<>,))),
+}
+
+
+/*
+initializer
+    : assignment_expression
+    | '{' initializer_list '}'
+    | '{' initializer_list ',' '}'
+    ;
+*/
+pub Initializer: ast::Initializer = {
+  <AssignmentExpression> => ast::Initializer::AssignmentExpression(Box::new((<>,))),
+  "{" <InitializerList> "}" => ast::Initializer::List(Box::new((<>,))),
+  "{" <InitializerList> "," "}" => ast::Initializer::ListWithTrailingComma(Box::new((<>,))),
+}
+
+/*
+initializer_list
+    : initializer
+    | initializer_list ',' initializer
+    ;
+*/
+pub InitializerList: ast::InitializerList = {
+  <Initializer> => ast::InitializerList::Single(Box::new((<>,))),
+  <InitializerList> "," <Initializer> => ast::InitializerList::Multiple(Box::new((<>,))),
+}
+
+/*
+statement
+    : labeled_statement
+    | compound_statement
+    | expression_statement
+    | selection_statement
+    | iteration_statement
+    | jump_statement
+    ;
+*/
+pub Statement: ast::Statement = {
+  <LabeledStatement> => ast::Statement::Labeled(Box::new((<>,))),
+  <CompoundStatement> => ast::Statement::Compound(Box::new((<>,))),
+  <ExpressionStatement> => ast::Statement::Expression(Box::new((<>,))),
+  <SelectionStatement> => ast::Statement::Selection(Box::new((<>,))),
+  <IterationStatement> => ast::Statement::Iteration(Box::new((<>,))),
+  <JumpStatement> => ast::Statement::Jump(Box::new((<>,))),
+}
+
+/*
+labeled_statement
+    : IDENTIFIER ':' statement
+    | CASE constant_expression ':' statement
+    | DEFAULT ':' statement
+    ;
+*/
+pub LabeledStatement: ast::LabeledStatement = {
+  <"identifier"> ":" <Statement> => ast::LabeledStatement::Identifier(Box::new((<>,))),
+  "case" <ConstantExpression> ":" <Statement> => ast::LabeledStatement::Case(Box::new((<>,))),
+  "default" ":" <Statement> => ast::LabeledStatement::Default(Box::new((<>,))),
+}
+
+/*
+compound_statement
+    : '{' '}'
+    | '{' statement_list '}'
+    | '{' declaration_list '}'
+    | '{' declaration_list statement_list '}'
+    ;
+*/
+pub CompoundStatement: ast::CompoundStatement = {
+  "{" "}" =>
+    ast::CompoundStatement::Empty,
+  "{" <StatementList> "}" => ast::CompoundStatement::StatementList(Box::new((<>,))),
+  "{" <DeclarationList> "}" => ast::CompoundStatement::DeclarationList(Box::new((<>,))),
+  "{" <DeclarationList> <StatementList> "}" => ast::CompoundStatement::DeclarationAndStatementList(Box::new((<>,))),
+}
+
+/*
+declaration_list
+    : declaration
+    | declaration_list declaration
+    ;
+*/
+pub DeclarationList: ast::DeclarationList = {
+  <Declaration> => ast::DeclarationList::Single(Box::new((<>,))),
+  <DeclarationList> <Declaration> => ast::DeclarationList::Multiple(Box::new((<>,))),
+}
+
+/*
+statement_list
+    : statement
+    | statement_list statement
+    ;
+*/
+pub StatementList: ast::StatementList = {
+  <Statement> => ast::StatementList::Single(Box::new((<>,))),
+  <StatementList> <Statement> => ast::StatementList::Multiple(Box::new((<>,))),
+}
+
+/*
+expression_statement
+    : ';'
+    | expression ';'
+    ;
+*/
+pub ExpressionStatement: ast::ExpressionStatement = {
+  ";" => ast::ExpressionStatement::Empty,
+  <Expression> ";" => ast::ExpressionStatement::Expression(Box::new((<>,))),
+}
+
+/*
+selection_statement
+    : IF '(' expression ')' statement
+    | IF '(' expression ')' statement ELSE statement
+    | SWITCH '(' expression ')' statement
+    ;
+*/
+pub SelectionStatement: ast::SelectionStatement = {
+  "if" "(" <Expression> ")" <Statement> => ast::SelectionStatement::If(Box::new((<>,))),
+      // I am cheating here, since I am using compount statements, instead of statements to escape the dangling else.
+  "if" "(" <Expression> ")" <CompoundStatement> "else" <CompoundStatement> => ast::SelectionStatement::IfElse(Box::new((<>,))),
+  "switch" "(" <Expression> ")" <Statement> => ast::SelectionStatement::Switch(Box::new((<>,))),
+}
+
+
+/*
+iteration_statement
+    : WHILE '(' expression ')' statement
+    | DO statement WHILE '(' expression ')' ';'
+    | FOR '(' expression_statement expression_statement ')' statement
+    | FOR '(' expression_statement expression_statement expression ')' statement
+    ;
+*/
+pub IterationStatement: ast::IterationStatement = {
+  "while" "(" <Expression> ")" <Statement> => ast::IterationStatement::While(Box::new((<>,))),
+  "do" <Statement> "while" "(" <Expression> ")" ";" => ast::IterationStatement::DoWhile(Box::new((<>,))),
+  "for" "(" <ExpressionStatement> <ExpressionStatement> ")" <Statement> => ast::IterationStatement::ForWithoutExpression(Box::new((<>,))),
+  "for" "(" <ExpressionStatement> <ExpressionStatement> <Expression> ")" <Statement> => ast::IterationStatement::ForWithExpression(Box::new((<>,))),
+}
+
+/*
+jump_statement
+    : GOTO IDENTIFIER ';'
+    | CONTINUE ';'
+    | BREAK ';'
+    | RETURN ';'
+    | RETURN expression ';'
+    ;
+*/
+pub JumpStatement: ast::JumpStatement = {
+  "goto" <"identifier"> ";" => ast::JumpStatement::Goto(Box::new((<>,))),
+  "continue" ";" => ast::JumpStatement::Continue,
+  "break" ";" => ast::JumpStatement::Break,
+  "return" ";" => ast::JumpStatement::ReturnEmpty,
+  "return" <Expression> ";" => ast::JumpStatement::Return(Box::new((<>,))),
+}
+
+/*
+translation_unit
+	: external_declaration
+	| translation_unit external_declaration
+	;
+*/
+pub TranslationUnit: ast::TranslationUnit = {
+  <ExternalDeclaration> => ast::TranslationUnit::Single(Box::new((<>,))),
+  <TranslationUnit> <ExternalDeclaration> => ast::TranslationUnit::Multiple(Box::new((<>,))),
+}
+
+/*
+external_declaration
+	: function_definition
+	| declaration
+	;
+*/
+pub ExternalDeclaration: ast::ExternalDeclaration = {
+  FunctionDefinition => ast::ExternalDeclaration::FunctionDefinition(Box::new((<>,))),
+  Declaration => ast::ExternalDeclaration::Declaration(Box::new((<>,))),
+}
+
+/*
+function_definition
+    : declaration_specifiers declarator declaration_list compound_statement
+    | declaration_specifiers declarator compound_statement
+    | declarator declaration_list compound_statement
+    | declarator compound_statement
+    ;
+*/
+pub FunctionDefinition: ast::FunctionDefinition = {
+  <DeclarationSpecifiers> <Declarator> <DeclarationList> <CompoundStatement> => ast::FunctionDefinition::Full(Box::new((<>,))),
+  <DeclarationSpecifiers> <Declarator> <CompoundStatement> => ast::FunctionDefinition::WithDeclarations(Box::new((<>,))),
+  <Declarator> <DeclarationList> <CompoundStatement> => ast::FunctionDefinition::WithDeclarationsAndDefinitions(Box::new((<>,))),
+  <Declarator> <CompoundStatement> => ast::FunctionDefinition::Simple(Box::new((<>,))),
+}

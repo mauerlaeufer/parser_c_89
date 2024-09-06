@@ -1,0 +1,13 @@
+[package]
+name = "parser_c_89"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+lalrpop = "0.20.2"
+
+[dependencies]
+lalrpop-util = { version = "0.20.2", features = [
+    "unicode",
+] }
+logos = "0.14.0"
