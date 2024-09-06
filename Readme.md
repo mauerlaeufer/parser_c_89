@@ -76,12 +76,12 @@ but not once the code goes into further statements. If you want a declaration in
 you can also confirm this with clang/gcc and the -std=c89 flag.
 
 ## Grammar and Lexing
-The lexer itself is configured inside /src/tokens.rs. The lexing was done on the basis of this [https://www.lysator.liu.se/c/ANSI-C-grammar-l.html](lex grammar).
-The grammar is defined inside /src/grammar.lalrpop and corresponds to this [https://www.lysator.liu.se/c/ANSI-C-grammar-y.html](Yacc grammar). 
+The lexer itself is configured inside /src/tokens.rs. The lexing was done on the basis of this [https://www.lysator.liu.se/c/ANSI-C-grammar-l.html](lex)grammar.
+The grammar is defined inside /src/grammar.lalrpop and corresponds to this [https://www.lysator.liu.se/c/ANSI-C-grammar-y.html](Yacc) grammar. 
 
 ## Missing features/theoretical complexities
-There are two major issues with the C89 grammar. Firstly the `typedef` functionality, which requires the lexer to use a symbol table or something similar, to lex these new types as keywords and not as identifiers. While this is probably possible with Logos, I chose not to implement this (Sanity and time constraints). [https://calculist.blogspot.com/2009/02/c-typedef-parsing-problem.html](See here for more information).
-Furthermore the C89 doesn't seem to care about [https://en.wikipedia.org/wiki/Dangling_else](dangling else), which leads to a shift/reduce conflict. By naively implementing it lalrpop provided this helpful error:
+There are two major issues with the C89 grammar. Firstly the `typedef` functionality, which requires the lexer to use a symbol table or something similar, to lex these new types as keywords and not as identifiers. While this is probably possible with Logos, I chose not to implement this (Sanity and time constraints). [https://calculist.blogspot.com/2009/02/c-typedef-parsing-problem.html](See) here for more information.
+Furthermore the C89 doesn't seem to care about [https://en.wikipedia.org/wiki/Dangling_else](dangling) else, which leads to a shift/reduce conflict. By naively implementing it lalrpop provided this helpful error:
 
   processing file `/home/hanno/Desktop/parser_c_89/src/grammar.lalrpop`
   /home/hanno/Desktop/parser_c_89/src/grammar.lalrpop:954:3: 955:54: Ambiguous grammar detected
