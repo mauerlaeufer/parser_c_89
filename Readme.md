@@ -47,11 +47,12 @@ This was introduced to allow fun data types like:
 
 
 Furthermore C89 doesn't have booleans and allows for horrors like these:
-'''
+```
    if (u = 6, "a") {
        e ++;
    }
-'''
+```
+
 
 
 Another interesting aspect is that declarations are only allowed either at top level via:
@@ -61,7 +62,8 @@ With declaration_list being a list of declarations (Not really surprising).
 The same is possible at the top of a function:
 function_definition -> [...] compound_statement -> ... -> { declaration_list statement_list }
 but not once the code goes into further statements. If you want a declaration inside there, you'll have to put it into braces:
-'''
+```
+
    int main () {
        a++;
        {
@@ -69,7 +71,8 @@ but not once the code goes into further statements. If you want a declaration in
        }
        int c = 5; // This isn't.
    }
-'''
+```
+
 you can also confirm this with clang/gcc and the -std=c89 flag.
 
 ## Grammar and Lexing
